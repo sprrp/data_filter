@@ -1,5 +1,5 @@
 from confluent_kafka import Producer, KafkaError
-import concurrent.futures
+import threading
 
 def kafka_producer_setup():
     # SSL configuration (replace with your SSL settings)
@@ -32,19 +32,9 @@ def send_message(producer, topic, message):
             print(f"Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
 
     try:
-        # The produce method does not block, so we use ThreadPoolExecutor to wait for its completion with a timeout.
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(producer.produce, topic, message.encode('utf-8'), callback=delivery_callback)
-            result = future.result(timeout=2)  # Wait for 2 seconds for the produce call to complete
-
-        if result is None:
-            print("Message delivery timed out.")
-            # Optionally, you can try to cancel the producer call here if required.
-        else:
-            print("Message delivered successfully.")
-    except concurrent.futures.TimeoutError:
-        print("Message delivery timed out.")
-        # Optionally, you can try to cancel the producer call here if required.
+        # The produce method does not block, so we need to wait for delivery
+        # and check if the message was successfully delivered within the timeout.
+        producer.produce(topic, message.encode('utf-8'), callback=delivery_callback)
     except KafkaError as e:
         print(f"Failed to send message: {e}")
 
@@ -53,7 +43,19 @@ if __name__ == "__main__":
     topic_name = "your_topic"
     message_to_send = "Hello, Kafka!"
 
-    send_message(kafka_producer, topic_name, message_to_send)
+    # Send the message in a separate thread
+    delivery_thread = threading.Thread(target=send_message, args=(kafka_producer, topic_name, message_to_send))
+    delivery_thread.start()
+
+    # Wait for the delivery_thread to finish its execution with a timeout of 2 seconds
+    delivery_thread.join(timeout=2)
+
+    if delivery_thread.is_alive():
+        # If the thread is still running after the timeout, consider it as a timeout.
+        print("Message delivery timed out.")
+        # Optionally, you can try to cancel the producer call here if required.
+    else:
+        print("Message delivered successfully.")
 
     kafka_producer.flush()  # Flush any remaining messages before closing the producer
     kafka_producer.close()
