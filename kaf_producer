@@ -1,61 +1,61 @@
 from confluent_kafka import Producer, KafkaError
 import threading
 
-def kafka_producer_setup():
-    # SSL configuration (replace with your SSL settings)
-    ssl_config = {
-        'security.protocol': 'ssl',
-        'ssl.ca.location': '/path/to/ca_certificate.pem',
-        'ssl.certificate.location': '/path/to/client_certificate.pem',
-        'ssl.key.location': '/path/to/client_key.pem',
-    }
+class KafkaSSltopicProducer:
+    def __init__(self, key, password, certificate, bootstrap_servers):
+        ssl_config = {
+            'security.protocol': 'ssl',
+            'ssl.key.location': key,
+            'ssl.key.password': password,
+            'ssl.certificate.location': certificate,
+        }
 
-    # Kafka producer configuration
-    producer_config = {
-        'bootstrap.servers': 'kafka_broker1:9093,kafka_broker2:9093',  # Replace with your Kafka broker addresses
-        'group.id': 'my_group',  # Optional consumer group ID if you need one
-        'security.protocol': 'ssl',
-        'ssl.ca.location': '/path/to/ca_certificate.pem',
-        'ssl.certificate.location': '/path/to/client_certificate.pem',
-        'ssl.key.location': '/path/to/client_key.pem',
-    }
+        producer_config = {
+            'bootstrap.servers': bootstrap_servers,
+            'group.id': 'my_group',
+            'security.protocol': 'ssl',
+            'ssl.key.location': key,
+            'ssl.key.password': password,
+            'ssl.certificate.location': certificate,
+        }
 
-    # Create the Kafka producer
-    producer = Producer(producer_config, ssl_context=ssl_config)
-    return producer
+        self.producer = Producer(producer_config, ssl_context=ssl_config)
 
-def send_message(producer, topic, message):
-    def delivery_callback(err, msg):
+    def delivery_callback(self, err, msg):
         if err is not None:
             print(f"Message delivery failed: {err}")
         else:
             print(f"Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
 
-    try:
-        # The produce method does not block, so we need to wait for delivery
-        # and check if the message was successfully delivered within the timeout.
-        producer.produce(topic, message.encode('utf-8'), callback=delivery_callback)
-    except KafkaError as e:
-        print(f"Failed to send message: {e}")
+    def send(self, topic, subject, channel, bot_name):
+        try:
+            message = f"{bot_name} says: {subject} on {channel}"
+            self.producer.produce(topic, message.encode('utf-8'), callback=self.delivery_callback)
+            self.producer.poll(0)  # Ensure message is sent (non-blocking poll)
+        except KafkaError as e:
+            print(f"Failed to send message: {e}")
 
 if __name__ == "__main__":
-    kafka_producer = kafka_producer_setup()
-    topic_name = "your_topic"
-    message_to_send = "Hello, Kafka!"
+    def send_with_timeout(kafka_producer, topic, subject, channel, bot_name):
+        kafka_producer.send(topic, subject, channel, bot_name)
+    
+    kafka_producer = KafkaSSltopicProducer(kafka_ssl_key(), kafka_ssl_passowrd(), kafka_ssl_certificate(), kafka_ssl_bootstrap_server())
+    topic_name = "hello"
+    message_subject = "newTeams"
+    teams_channel = "prod"
+    harmony_bot_name = "testing"
 
     # Send the message in a separate thread
-    delivery_thread = threading.Thread(target=send_message, args=(kafka_producer, topic_name, message_to_send))
+    delivery_thread = threading.Thread(target=send_with_timeout, args=(kafka_producer, topic_name, message_subject, teams_channel, harmony_bot_name))
     delivery_thread.start()
 
     # Wait for the delivery_thread to finish its execution with a timeout of 2 seconds
     delivery_thread.join(timeout=2)
 
     if delivery_thread.is_alive():
-        # If the thread is still running after the timeout, consider it as a timeout.
         print("Message delivery timed out.")
-        # Optionally, you can try to cancel the producer call here if required.
     else:
         print("Message delivered successfully.")
 
-    kafka_producer.flush()  # Flush any remaining messages before closing the producer
-    kafka_producer.close()
+    kafka_producer.producer.flush()  # Flush any remaining messages before closing the producer
+    kafka_producer.producer.close()
