@@ -1,5 +1,5 @@
 from confluent_kafka import Producer, KafkaError
-import threading
+import concurrent.futures
 
 class KafkaSSltopicProducer:
     def __init__(self, key, password, certificate, bootstrap_servers):
@@ -27,35 +27,37 @@ class KafkaSSltopicProducer:
         else:
             print(f"Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
 
-    def send(self, topic, subject, channel, bot_name):
-        try:
-            message = f"{bot_name} says: {subject} on {channel}"
+    def send(self, topic, subject, channel, bot_name, timeout=2):
+        message = f"{bot_name} says: {subject} on {channel}"
+
+        def send_message():
             self.producer.produce(topic, message.encode('utf-8'), callback=self.delivery_callback)
             self.producer.poll(0)  # Ensure message is sent (non-blocking poll)
-        except KafkaError as e:
-            print(f"Failed to send message: {e}")
+
+        # Use ThreadPoolExecutor to execute the send_message function asynchronously
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit the send_message function to the ThreadPoolExecutor
+            future = executor.submit(send_message)
+
+            try:
+                # Wait for the send_message function to complete or timeout
+                result = future.result(timeout=timeout)
+
+                if result:
+                    print("Message delivered successfully.")
+                else:
+                    print("Message delivery failed.")
+            except concurrent.futures.TimeoutError:
+                print("Message delivery timed out.")
 
 if __name__ == "__main__":
-    def send_with_timeout(kafka_producer, topic, subject, channel, bot_name):
-        kafka_producer.send(topic, subject, channel, bot_name)
-    
     kafka_producer = KafkaSSltopicProducer(kafka_ssl_key(), kafka_ssl_passowrd(), kafka_ssl_certificate(), kafka_ssl_bootstrap_server())
     topic_name = "hello"
     message_subject = "newTeams"
     teams_channel = "prod"
     harmony_bot_name = "testing"
 
-    # Send the message in a separate thread
-    delivery_thread = threading.Thread(target=send_with_timeout, args=(kafka_producer, topic_name, message_subject, teams_channel, harmony_bot_name))
-    delivery_thread.start()
-
-    # Wait for the delivery_thread to finish its execution with a timeout of 2 seconds
-    delivery_thread.join(timeout=2)
-
-    if delivery_thread.is_alive():
-        print("Message delivery timed out.")
-    else:
-        print("Message delivered successfully.")
+    kafka_producer.send(topic_name, message_subject, teams_channel, harmony_bot_name)
 
     kafka_producer.producer.flush()  # Flush any remaining messages before closing the producer
-    kafka_producer.producer.close()
+    kafka_producer.producer.close()  # Close the producer
