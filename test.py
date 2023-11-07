@@ -1,63 +1,32 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import io
-import sys
-import os
+import run_all_test
 
-class TestRunAllTestScript(unittest.TestCase):
-    def test_run_all_tests(self):
-        # Create a temporary test directory
-        test_directory = "temp_test_dir"
-        os.mkdir(test_directory)
+class TestRunAllTest(unittest.TestCase):
+    @patch('sys.argv', ['run_all_test.py', 'tests_directory'])
+    @patch('logging.basicConfig')
+    @patch('logging.getLogger')
+    @patch('unittest.defaultTestLoader.discover')
+    @patch('unittest.TextTestRunner')
+    def test_run_all_tests(self, mock_runner, mock_discover, mock_get_logger, mock_basic_config):
+        with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+            # Mock the test result to simulate a successful test run.
+            mock_result = Mock()
+            mock_result.wasSuccessful.return_value = True
+            mock_runner.return_value.run.return_value = mock_result
 
-        # Create a dummy test file in the temporary directory
-        with open(f"{test_directory}/dummy_test.py", "w") as f:
-            f.write("import unittest\n\n"
-                    "class DummyTest(unittest.TestCase):\n"
-                    "    def test_dummy(self):\n"
-                    "        self.assertTrue(True)\n")
+            run_all_test.__name__ = "__main__"
+            run_all_test.main()
 
-        # Redirect stdout to capture the script's output
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            with patch("sys.argv", ["run_all_test.py", test_directory]):
-                import run_all_test  # Run the script
+            mock_basic_config.assert_called_with(stream=mock_stderr)
+            mock_get_logger.return_value.setLevel.assert_called_with(logging.DEBUG)
+            mock_discover.assert_called_with('tests_directory', pattern='*_test-py')
+            mock_runner.assert_called_with(resultclass=unittest.TextTestResult)
+            mock_runner.return_value.run.assert_called_with(mock_discover.return_value)
 
-        # Clean up the temporary directory
-        os.rmdir(test_directory)
-
-        # Check the script's exit code
-        self.assertEqual(run_all_test.sys.exit_code, 0)
-
-        # Check that the script output contains test results
-        script_output = mock_stdout.getvalue()
-        self.assertIn("Ran 1 test", script_output)
-        self.assertIn("OK", script_output)
+            # Ensure the exit code is 0 (success) when the test run is successful.
+            self.assertEqual(run_all_test.sys.exit.call_args[0][0], 0)
 
 if __name__ == '__main__':
-    unittest.main()
-
-
-
-import unittest
-import subprocess
-import os
-
-class TestRunAllTestScript(unittest.TestCase):
-
-    def test_script_runs_tests_successfully(self):
-        # Define the test directory where your test files are located
-        test_directory = "path/to/your/test_directory"
-
-        # Run the run_all_test.py script with the test directory as an argument
-        cmd = ["python3", "run_all_test.py", test_directory]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        # Check if the script returned a successful exit status (0)
-        self.assertEqual(result.returncode, 0)
-
-        # Optionally, you can check for specific messages in stdout or stderr
-        # For example, if your script prints "All tests passed." on success
-        self.assertIn(b'All tests passed.', result.stdout)
-
-if __name__ == "__main__":
     unittest.main()
