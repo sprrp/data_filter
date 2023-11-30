@@ -1,0 +1,21 @@
+"query": {
+    "bool": {
+        "must": [
+            {
+                "bool": {
+                    "should": [
+                        {
+                            "query_string": {
+                                "query": "((type:phrase AND query:\"Unable to construct an appropriate auth session\" AND lenient:true) OR (range:[2023-11-30T12:00:35.9942Z TO 2023-11-30T12:45:09.4717Z])) AND (should:[{{match_phrases}}] minimum_should_match:1)",
+                                "default_field": "some_field"  // Replace with the actual field you're querying against
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "filter": [],
+        "should": [],
+        "must_not": []
+    }
+}
