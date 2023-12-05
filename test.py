@@ -1,4 +1,159 @@
 import unittest
+from unittest.mock import MagicMock, patch
+from datetime import date
+from your_module import (
+    ForgerockTokenAuthDateProcessor,
+    ForgerockTokenAuthAlertProcessor,
+    handle_data,
+    handle_notification,
+)
+
+class TestForgerockTokenAuthDateProcessor(unittest.TestCase):
+
+    def test_collect_data_enabled(self):
+        dynamodb_mock = MagicMock()
+        config_mock = {"data_enabled": True}
+        secrets_manager_mock = MagicMock()
+
+        processor = ForgerockTokenAuthDateProcessor(dynamodb_mock, config_mock, secrets_manager_mock)
+        processor.filter_data = MagicMock(return_value="mock_metric_data")
+
+        processor.collect_data()
+
+        dynamodb_mock.insert_metrics_data.assert_called_once_with("mock_metric_data")
+
+    def test_collect_data_disabled(self):
+        dynamodb_mock = MagicMock()
+        config_mock = {"data_enabled": False}
+        secrets_manager_mock = MagicMock()
+
+        processor = ForgerockTokenAuthDateProcessor(dynamodb_mock, config_mock, secrets_manager_mock)
+        processor.filter_data = MagicMock(return_value="mock_metric_data")
+
+        processor.collect_data()
+
+        dynamodb_mock.insert_metrics_data.assert_not_called()
+
+    @patch('your_module.query_elastic_tracking')
+    @patch('your_module.utils.get_current_time_epoch')
+    def test_filter_data_no_results(self, get_current_time_epoch_mock, query_elastic_tracking_mock):
+        get_current_time_epoch_mock.return_value = "mock_time"
+        query_elastic_tracking_mock.return_value = {"hits": {"total": {"value": 0}}}
+
+        processor = ForgerockTokenAuthDateProcessor(None, None, None)
+        result = processor.filter_data()
+
+        self.assertIsNone(result)
+
+    @patch('your_module.query_elastic_tracking')
+    @patch('your_module.utils.get_current_time_epoch')
+    def test_filter_data_with_results(self, get_current_time_epoch_mock, query_elastic_tracking_mock):
+        get_current_time_epoch_mock.return_value = "mock_time"
+        query_elastic_tracking_mock.return_value = {
+            "hits": {"total": {"value": 1}},
+            "hits": {"hits": [{"_source": {"datacenter": "dc1", "easi": "easi1", "node": "node1", "etl": {"lsnode": "lsnode1"}}}]}
+        }
+
+        processor = ForgerockTokenAuthDateProcessor(None, None, None)
+        result = processor.filter_data()
+
+        expected_metadata = {"perf_over": (None, "datasource", None)}
+        expected_metric_data = MagicMock()
+        expected_metric_data.assert_called_once_with(MetricType.FORGEROCK_TOKEN_AUTH, [{"dc": "dc1", "easi": "easi1", "node": "node1", "lsnode": "lsnode1"}], "mock_time", expected_metadata)
+        self.assertEqual(result, expected_metric_data.return_value)
+
+
+class TestForgerockTokenAuthAlertProcessor(unittest.TestCase):
+
+    @patch('your_module.Notifier.send_notifications')
+    @patch('your_module.Notifier.save_data')
+    @patch('your_module.Notifier.dynamodb.get_metric_data')
+    def test_process_alerts_no_data(self, get_metric_data_mock, save_data_mock, send_notifications_mock):
+        get_metric_data_mock.return_value = []
+
+        processor = ForgerockTokenAuthAlertProcessor(None, None, None, None)
+        processor.evaluate = MagicMock()
+
+        processor.process_alerts()
+
+        processor.evaluate.assert_not_called()
+        send_notifications_mock.assert_not_called()
+        save_data_mock.assert_not_called()
+
+    @patch('your_module.Notifier.send_notifications')
+    @patch('your_module.Notifier.save_data')
+    @patch('your_module.Notifier.dynamodb.get_metric_data')
+    def test_process_alerts_with_data(self, get_metric_data_mock, save_data_mock, send_notifications_mock):
+        get_metric_data_mock.return_value = [MagicMock()]
+
+        processor = ForgerockTokenAuthAlertProcessor(None, None, None, None)
+        processor.evaluate = MagicMock()
+
+        processor.process_alerts()
+
+        processor.evaluate.assert_called_once()
+        send_notifications_mock.assert_called_once()
+        save_data_mock.assert_called_once()
+
+    @patch('your_module.Notifier.send_notifications')
+    @patch('your_module.Notifier.save_data')
+    @patch('your_module.Notifier.dynamodb.get_metric_data')
+    def test_process_alerts_notifications_disabled(self, get_metric_data_mock, save_data_mock, send_notifications_mock):
+        get_metric_data_mock.return_value = [MagicMock()]
+        config_mock = {"notifications_enabled": False}
+
+        processor = ForgerockTokenAuthAlertProcessor(None, config_mock, None, None)
+        processor.evaluate = MagicMock()
+
+        processor.process_alerts()
+
+        processor.evaluate.assert_called_once()
+        send_notifications_mock.assert_not_called()
+        save_data_mock.assert_called_once()
+
+    @patch('your_module.Notifier.send_notifications')
+    @patch('your_module.Notifier.save_data')
+    @patch('your_module.Notifier.dynamodb.get_metric_data')
+    def test_process_alerts_notifications_disabled_no_data(self, get_metric_data_mock, save_data_mock, send_notifications_mock):
+        get_metric_data_mock.return_value = []
+        config_mock = {"notifications_enabled": False}
+
+        processor = ForgerockTokenAuthAlertProcessor(None, config_mock, None, None)
+        processor.evaluate = MagicMock()
+
+        processor.process_alerts()
+
+        processor.evaluate.assert_not_called()
+        send_notifications_mock.assert_not_called()
+        save_data_mock.assert_not_called()
+
+    @patch('your_module.Notifier.active_breaches')
+    @patch('your_module.Notifier.event')
+    def test_evaluate(self, event_mock, active_breaches_mock):
+        processor = ForgerockTokenAuthAlertProcessor(None, None, None, None)
+
+        latest_results = [{"dc": "dc1", "node": "node1", "lsnode": "lsnode1", "easi": "easi1"}]
+        event_mock.get_value.return_value = latest_results
+
+        processor.evaluate(None)
+
+        event_mock.add_breach.assert_called_once_with("dc1_node1_lsnode1", 1)
+        event_mock.add_breach().add_metadata.assert_called_once_with("node", "node1")
+        event_mock.add_breach().add_metadata.assert_called_once_with("lsnode", "lsnode1")
+        event_mock.add_breach().add_metadata.assert_called_once_with("easi", "easi1")
+        event_mock.add_breach().add_metadata.assert_called_once_with("dc", "dc1")
+
+        active_breaches_mock.assert_called_once()
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+
+
+
+import unittest
 from unittest.mock import MagicMock
 from datetime import date
 from your_module import ForgerockTokenAuthAlertProcessor, handle_notification
