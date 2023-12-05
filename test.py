@@ -53,7 +53,7 @@ class TestForgerockTokenAuthAlertProcessor(unittest.TestCase):
 
         # Mocking get_metric_data method to return sample data
         forgerock_alert_processor.dynamodb.get_metric_data.return_value = [
-            MagicMock(get_value=lambda: [{"dc": "dc1", "node": "node1", "lsnode": "lsnode1", "easi": "easi1"}])
+            MagicMock(get_value=[{"dc": "dc1", "node": "node1", "lsnode": "lsnode1", "easi": "easi1"}])
         ]
 
         # Act
@@ -155,6 +155,11 @@ class TestForgerockTokenAuthAlertProcessor(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+
+
 
 
 
