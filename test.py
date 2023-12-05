@@ -1,4 +1,165 @@
 import unittest
+from unittest.mock import MagicMock
+from datetime import date
+from your_module import ForgerockTokenAuthAlertProcessor, handle_notification
+
+class TestForgerockTokenAuthAlertProcessor(unittest.TestCase):
+
+    def test_process_alerts_with_notifications_enabled(self):
+        # Arrange
+        dynamodb_mock = MagicMock()
+        config_mock = {
+            "notifications_enabled": True,
+            "slack": {
+                "event_start": {
+                    "header": "your_slack_event_start_header"
+                },
+                "event_clear": {
+                    "header": "your_slack_event_clear_header"
+                }
+            },
+            "teams": {
+                "event_start": {
+                    "header": "your_teams_event_start_header"
+                }
+            },
+            "flapping_period": 5  # Adjust this to match your actual flapping period
+        }
+        secrets_manager_mock = MagicMock()
+        sqs_class_mock = MagicMock()
+
+        # Mocking alert_config
+        alert_config_mock = {
+            "notifications_enabled": True,
+            "slack": {
+                "event_start": {
+                    "header": "your_slack_event_start_header"
+                },
+                "event_clear": {
+                    "header": "your_slack_event_clear_header"
+                }
+            },
+            "teams": {
+                "event_start": {
+                    "header": "your_teams_event_start_header"
+                }
+            }
+        }
+
+        forgerock_alert_processor = ForgerockTokenAuthAlertProcessor(
+            dynamodb_mock, config_mock, secrets_manager_mock, sqs_class_mock, metric_date=date.today()
+        )
+        forgerock_alert_processor.alert_config = alert_config_mock
+
+        # Mocking get_metric_data method to return sample data
+        forgerock_alert_processor.dynamodb.get_metric_data.return_value = [
+            MagicMock(get_value=lambda: [{"dc": "dc1", "node": "node1", "lsnode": "lsnode1", "easi": "easi1"}])
+        ]
+
+        # Act
+        forgerock_alert_processor.process_alerts()
+
+        # Assert
+        forgerock_alert_processor.dynamodb.get_metric_data.assert_called_once_with(
+            forgerock_alert_processor.MetricType.FORGEROCK_TOKEN_AUTH, metric_date=date.today()
+        )
+        forgerock_alert_processor.evaluate.assert_called_once_with(
+            {"dc": "dc1", "node": "node1", "lsnode": "lsnode1", "easi": "easi1"}
+        )
+        forgerock_alert_processor.send_notifications.assert_called_once()
+        forgerock_alert_processor.save_data.assert_called_once()
+
+    def test_process_alerts_with_notifications_disabled(self):
+        # Arrange
+        dynamodb_mock = MagicMock()
+        config_mock = {
+            "notifications_enabled": False,
+            "slack": {
+                "event_start": {
+                    "header": "your_slack_event_start_header"
+                },
+                "event_clear": {
+                    "header": "your_slack_event_clear_header"
+                }
+            },
+            "teams": {
+                "event_start": {
+                    "header": "your_teams_event_start_header"
+                }
+            },
+            "flapping_period": 5  # Adjust this to match your actual flapping period
+        }
+        secrets_manager_mock = MagicMock()
+        sqs_class_mock = MagicMock()
+
+        # Mocking alert_config
+        alert_config_mock = {
+            "notifications_enabled": False,
+            "slack": {
+                "event_start": {
+                    "header": "your_slack_event_start_header"
+                },
+                "event_clear": {
+                    "header": "your_slack_event_clear_header"
+                }
+            },
+            "teams": {
+                "event_start": {
+                    "header": "your_teams_event_start_header"
+                }
+            }
+        }
+
+        forgerock_alert_processor = ForgerockTokenAuthAlertProcessor(
+            dynamodb_mock, config_mock, secrets_manager_mock, sqs_class_mock, metric_date=date.today()
+        )
+        forgerock_alert_processor.alert_config = alert_config_mock
+
+        # Act
+        result = forgerock_alert_processor.process_alerts()
+
+        # Assert
+        self.assertIsNone(result)
+        forgerock_alert_processor.dynamodb.get_metric_data.assert_not_called()
+        forgerock_alert_processor.evaluate.assert_not_called()
+        forgerock_alert_processor.send_notifications.assert_not_called()
+        forgerock_alert_processor.save_data.assert_not_called()
+
+    def test_slack_new_alert_blocks(self):
+        # Arrange
+        forgerock_alert_processor = ForgerockTokenAuthAlertProcessor(
+            MagicMock(), MagicMock(), MagicMock(), MagicMock(), metric_date=date.today()
+        )
+        forgerock_alert_processor.alert_config = {
+            "slack": {
+                "event_start": {
+                    "header": "your_slack_event_start_header"
+                }
+            }
+        }
+        forgerock_alert_processor.slack_time.return_value = "formatted_time"
+
+        # Act
+        blocks, popup_text = forgerock_alert_processor.slack_new_alert_blocks()
+
+        # Assert
+        expected_blocks = [
+            MagicMock(text="your_slack_event_start_header\n"),
+            MagicMock(elements=[MagicMock(text="Updated at formatted_time")])
+        ]
+        expected_popup_text = "Forge Rock on multiple instances"
+        self.assertEqual(blocks, expected_blocks)
+        self.assertEqual(popup_text, expected_popup_text)
+
+    # Add more test cases for other methods as needed
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+
+
+import unittest
 from unittest.mock import patch, MagicMock
 from datetime import date, datetime
 from your_module import ForgerockTokenAuthAlertProcessor, handle_notification
