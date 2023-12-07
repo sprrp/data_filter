@@ -1,36 +1,51 @@
-import re
+import json
+import unittest
+from unittest.mock import patch, MagicMock
+from perf_common.data_collector import DataCollector, MetricData, MetricType
 
-input_data = {
-    'us': {
-        'm7': {'bank1m7': 9.0},
-        'm5': {'bank401m5': 1000.0, 'bank501m5': 15.0},
-        'm3': {'bank401m4': 10, 'bank301m3': 11}
-    },
-    'test': {
-        'm7': {'test1m7': 9.0},
-        'm5': {'btest401m5': 100.0, 'btest501m5': 19.0},
-        'm3': {'btest401m4': 10, 'btest301m3': 110}
-    }
-}
+class TestSurgeQueues(unittest.TestCase):
 
-# Combine m3 and m5 data and sort by descending order of values
-combined_data = {}
-for key, value in input_data.items():
-    combined_data[key] = {}
-    combined_data[key]['m35'] = {k: v for d in (value['m3'], value['m5']) for k, v in d.items()}
-    combined_data[key]['m35'] = dict(sorted(combined_data[key]['m35'].items(), key=lambda x: x[1], reverse=True))
+    def setUp(self):
+        self.ddb_mock = MagicMock()
+        self.config_mock = {
+            "data-sources": {
+                "prometheus": "your_prometheus_config_here"
+            }
+        }
+        self.secrets_manager_mock = MagicMock()
 
-# Calculate percentage differences for each key in the combined m3 and m5 data
-for key, value in combined_data.items():
-    first_key, first_val = list(value['m35'].items())[0]
-    percentage_diffs = []
-    for k, v in list(value['m35'].items())[1:]:
-        percent_diff = abs(round((v - first_val) / first_val * 100, 2))
-        if percent_diff > 5:
-            print(f"Key '{first_key}' in '{key}' has a difference of more than 10% with '{k}': {percent_diff}%")
-        percentage_diffs.append((k, percent_diff))
-    combined_data[key]['m35']['percentage_diffs'] = percentage_diffs
-    
-    print("here is the result", first_key)
+    @patch('perf_common.data_sources.prometheus.query_prometheus', return_value={"result": "mocked_result"})
+    def test_collect_data(self, query_prometheus_mock):
+        # Set up the mocks
+        surge_queues = Surgequeues(self.ddb_mock, self.config_mock, self.secrets_manager_mock)
 
-print(combined_data)
+        # Load expected data from mock_data.json
+        with open('mock_data.json', 'r') as file:
+            expected_data = json.load(file)
+
+        # Create mock objects for dependencies
+        logger_mock = MagicMock()
+        surge_queues.logger = logger_mock
+
+        # Call the method to be tested
+        surge_queues.collect_data()
+
+        # Assertions
+        logger_mock.info.assert_called_with("START: Querying Prometheus for Surge Queues")
+
+        query_prometheus_mock.assert_called_once_with(
+            self.config_mock["data-sources"]["prometheus"],
+            'your_rendered_query',
+        )
+
+        metric_data_mock = MetricData(
+            MetricType.SURGE_QUEUE,
+            {"group1": [{"result": "mocked_result", "query": {"template": "your_template", "time_range": "your_time_range", "threshold": 1}}]},
+            surge_queues.report_time
+        )
+        surge_queues.dynamodb.insert_metrics_data.assert_called_once_with(metric_data_mock)
+
+        logger_mock.info.assert_called_with("END: Querying Prometheus for Surge Queues")
+
+if __name__ == '__main__':
+    unittest.main()
