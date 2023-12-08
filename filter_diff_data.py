@@ -121,3 +121,87 @@ class TestSurgeQueueAlertProcessor(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+import unittest
+from unittest.mock import patch, MagicMock
+from your_module import SurgeQueueAlertProcessor
+
+class TestSurgeQueueAlertProcessor(unittest.TestCase):
+
+    # Set up common mocks for the class
+    @patch('your_module.SurgeQueueAlertProcessor.dynamodb')
+    @patch('your_module.SurgeQueueAlertProcessor.config', {"alert_query_time_range": 60})  # Add other config values as needed
+    @patch('your_module.SurgeQueueAlertProcessor.logger')
+    def setUp(self, logger_mock, dynamodb_mock):
+        self.surge_queue_alert_processor = SurgeQueueAlertProcessor(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+
+    # ... Other test methods ...
+
+    @patch('your_module.SurgeQueueAlertProcessor.send_notifications')
+    @patch('your_module.SurgeQueueAlertProcessor.save_data')
+    def test_process_alerts_no_data(self, save_data_mock, send_notifications_mock):
+        # Set up mock data for testing an empty data list
+        self.surge_queue_alert_processor.dynamodb.get_metric_data.return_value = []
+
+        # Call the method to be tested
+        self.surge_queue_alert_processor.process_alerts()
+
+        # Assertions based on the expected behavior when data is empty
+        self.surge_queue_alert_processor.dynamodb.get_metric_data.assert_called_once_with(
+            'SURGE_QUEUE', str(datetime.date.today()), utils.get_minutes_ago_epoch(60))
+
+        send_notifications_mock.assert_not_called()
+        save_data_mock.assert_not_called()
+
+        # You may need more specific assertions based on the behavior of your methods
+        # For example, check if the logger methods are called with the expected messages
+
+        # Example assertions:
+        self.surge_queue_alert_processor.logger.info.assert_called_with("No data returned for Surge Queues in the last %s minutes", 60)
+
+        # Add more assertions based on your specific requirements
+
+    # Add more test methods as needed, considering other scenarios
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+
+@patch('your_module.SurgeQueueAlertProcessor.send_notifications')
+@patch('your_module.SurgeQueueAlertProcessor.save_data')
+def test_process_alerts_with_data(self, save_data_mock, send_notifications_mock):
+    # Set up mock data for testing a non-empty data dictionary
+    mock_metric_data = {
+        "latest_results": {
+            "group1": [
+                {
+                    "prometheus_server": "test_server",
+                    "metric": {"citrixadc_lb_name": "test_lb"},
+                    "value": [100, 10],
+                    # Add other necessary fields
+                }
+            ],
+            # Add more groups if needed
+        }
+    }
+
+    self.surge_queue_alert_processor.dynamodb.get_metric_data.return_value = mock_metric_data
+
+    # Call the method to be tested
+    self.surge_queue_alert_processor.process_alerts()
+
+    # Assertions based on the expected behavior when data is not empty
+    self.surge_queue_alert_processor.dynamodb.get_metric_data.assert_called_once_with(
+        'SURGE_QUEUE', str(datetime.date.today()), utils.get_minutes_ago_epoch(60))
+
+    send_notifications_mock.assert_called_once()
+    save_data_mock.assert_called_once()
+
+    # You may need more specific assertions based on the behavior of your methods
+    # Example assertions:
+    self.surge_queue_alert_processor.logger.info.assert_called_with("Sending notifications")
+    self.surge_queue_alert_processor.logger.info.assert_called_with("Persisting data to DynamoDB")
+
+    # Add more assertions based on your specific requirements
