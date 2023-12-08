@@ -1,35 +1,123 @@
-input_data = {
-    'us': {
-        'm7': {'bank1m7': 9.0},
-        'm5': {'bank401m5': 1000.0, 'bank501m5': 15.0},
-        'm3': {'bank401m4': 10, 'bank301m3': 11}
-    },
-    'test': {
-        'm7': {'test1m7': 9.0},
-        'm5': {'btest401m5': 100.0, 'btest501m5': 19.0},
-        'm3': {'btest401m4': 10, 'btest301m3': 110}
-    }
-}
+import unittest
+from unittest.mock import patch, MagicMock
+from your_module import SurgeQueueAlertProcessor
+
+class TestSurgeQueueAlertProcessor(unittest.TestCase):
+
+    # Set up common mocks for the class
+    @patch('your_module.SurgeQueueAlertProcessor.dynamodb')
+    @patch('your_module.SurgeQueueAlertProcessor.config', {"alert_query_time_range": 60})  # Add other config values as needed
+    @patch('your_module.SurgeQueueAlertProcessor.logger')
+    def setUp(self, logger_mock, dynamodb_mock):
+        self.surge_queue_alert_processor = SurgeQueueAlertProcessor(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+
+    # ... Other test methods ...
+
+    @patch('your_module.SurgeQueueAlertProcessor.send_notifications')
+    @patch('your_module.SurgeQueueAlertProcessor.save_data')
+    def test_process_alerts(self, save_data_mock, send_notifications_mock):
+        # Set up mock data for testing
+        mock_metric_data = [your_mock_metric_data]  # Replace with your actual mock data
+        self.surge_queue_alert_processor.dynamodb.get_metric_data.return_value = mock_metric_data
+
+        # Call the method to be tested
+        self.surge_queue_alert_processor.process_alerts()
+
+        # Assertions based on the expected behavior of process_alerts
+        self.surge_queue_alert_processor.dynamodb.get_metric_data.assert_called_once_with(
+            'SURGE_QUEUE', str(datetime.date.today()), utils.get_minutes_ago_epoch(60))
+
+        send_notifications_mock.assert_called_once()
+        save_data_mock.assert_called_once()
+
+        # You may need more specific assertions based on the behavior of your methods
+        # For example, check if the logger methods are called with the expected messages
+
+        # Example assertions:
+        self.surge_queue_alert_processor.logger.info.assert_called_with("No data returned for Surge Queues in last %s minutes", 60)
+        self.surge_queue_alert_processor.logger.info.assert_called_with("Sending notifications")
+        self.surge_queue_alert_processor.logger.info.assert_called_with("Persisting data to DynamoDB")
+
+        # Add more assertions based on your specific requirements
+
+if __name__ == '__main__':
+    unittest.main()
 
 
-sorted_data = {}
-for key, value in input_data.items():
-    sorted_data[key] = {}
-    m35_data = {}
-    for m_key in ['m3', 'm5']:
-        if m_key in value.keys():
-            m35_data.update(value[m_key])
-    sorted_m35_data = dict(sorted(m35_data.items(), key=lambda item: item[1], reverse=True))
-    sorted_data[key]['m35'] = {}
-    sorted_data[key]['m35'].update(sorted_m35_data)
-    sorted_data[key]['m35']['percentage_diffs'] = []
-    first_val = list(sorted_m35_data.values())[0]
-    for k, v in sorted_m35_data.items():
-        if k != list(sorted_m35_data.keys())[0]:
-            percentage_diff = abs((v - first_val) / first_val * 100)
-            print(percentage_diff)
-            sorted_data[key]['m35']['percentage_diffs'].append(percentage_diff)
-    if all(abs(diff) >= 10 for diff in sorted_data[key]['m35']['percentage_diffs']):
-        print(list(sorted_m35_data.keys())[0])
-#     return None
-# print(get_first_element_with_10_percent_diff(input_data))
+
+import unittest
+from unittest.mock import patch, MagicMock
+from your_module import SurgeQueueAlertProcessor
+
+class TestSurgeQueueAlertProcessor(unittest.TestCase):
+
+    # Set up common mocks for the class
+    @patch('your_module.SurgeQueueAlertProcessor.dynamodb')
+    @patch('your_module.SurgeQueueAlertProcessor.config', {"alert_query_time_range": 60})  # Add other config values as needed
+    @patch('your_module.SurgeQueueAlertProcessor.logger')
+    def setUp(self, logger_mock, dynamodb_mock):
+        self.surge_queue_alert_processor = SurgeQueueAlertProcessor(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+
+    # ... Other test methods ...
+
+    def test_slack_new_alert_blocks(self):
+        # Set up mock data for testing
+        mock_alert = MagicMock()
+        mock_alert.get_metadata.return_value = {'lb_name': 'TestLB', 'instance': 'TestInstance'}
+        self.surge_queue_alert_processor.event.active_breaches.return_value = {'alert_1': mock_alert}
+
+        # Call the method to be tested
+        result_blocks, popup_text = self.surge_queue_alert_processor.slack_new_alert_blocks()
+
+        # Assertions based on the expected behavior of slack_new_alert_blocks
+        # You may need to adjust these assertions based on the actual behavior of your code
+        self.assertEqual(len(result_blocks), expected_number_of_blocks)
+        self.assertIn('TestLB', result_blocks[0].text)  # Adjust this based on your actual block structure
+
+        # Add more assertions based on your specific requirements
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+import unittest
+from unittest.mock import patch, MagicMock
+from your_module import SurgeQueueAlertProcessor
+
+class TestSurgeQueueAlertProcessor(unittest.TestCase):
+
+    @patch('your_module.SurgeQueueAlertProcessor.dynamodb')
+    @patch('your_module.SurgeQueueAlertProcessor.config', {"alert_query_time_range": 60})  # Add other config values as needed
+    @patch('your_module.SurgeQueueAlertProcessor.send_notifications')  # Mock other dependencies as needed
+    @patch('your_module.SurgeQueueAlertProcessor.save_data')
+    @patch('your_module.SurgeQueueAlertProcessor.logger')
+    def test_process_alerts(self, logger_mock, save_data_mock, send_notifications_mock, dynamodb_mock):
+        # Set up mock data for testing
+        mock_metric_data = [your_mock_metric_data]  # Replace with your actual mock data
+        dynamodb_mock.get_metric_data.return_value = mock_metric_data
+
+        # Create a mock instance of the SurgeQueueAlertProcessor
+        surge_queue_alert_processor = SurgeQueueAlertProcessor(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+
+        # Call the method to be tested
+        surge_queue_alert_processor.process_alerts()
+
+        # Assertions based on the expected behavior of process_alerts
+        dynamodb_mock.get_metric_data.assert_called_once_with(
+            'SURGE_QUEUE', str(datetime.date.today()), utils.get_minutes_ago_epoch(60))
+
+        send_notifications_mock.assert_called_once()
+        save_data_mock.assert_called_once()
+
+        # You may need more specific assertions based on the behavior of your methods
+        # For example, check if the logger methods are called with the expected messages
+
+        # Example assertions:
+        logger_mock.info.assert_called_with("No data returned for Surge Queues in last %s minutes", 60)
+        logger_mock.info.assert_called_with("Sending notifications")
+        logger_mock.info.assert_called_with("Persisting data to DynamoDB")
+
+        # Add more assertions based on your specific requirements
+
+if __name__ == '__main__':
+    unittest.main()
